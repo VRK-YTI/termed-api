@@ -42,6 +42,7 @@ public class NodeChangesetController {
       @RequestParam(name = "sync", defaultValue = "false") boolean sync,
       @RequestParam(name = "generateCodes", defaultValue = "true") boolean generateCodes,
       @RequestParam(name = "generateUris", defaultValue = "true") boolean generateUris,
+      @RequestParam(name = "append", defaultValue = "true") boolean append,
       @RequestBody Changeset<NodeId, Node> changeset,
       @AuthenticationPrincipal User user) {
 
@@ -57,7 +58,7 @@ public class NodeChangesetController {
             .map(patch -> {
               NodeId id = new NodeId(requireNonNull(patch.getId()), type);
               Node prev = nodeService.get(id, user).orElseThrow(NotFoundException::new);
-              return merge(prev, patch);
+              return merge(prev, patch, append);
             }));
 
     Stream<NodeId> deletes =
@@ -76,6 +77,7 @@ public class NodeChangesetController {
       @RequestParam(name = "sync", defaultValue = "false") boolean sync,
       @RequestParam(name = "generateCodes", defaultValue = "true") boolean generateCodes,
       @RequestParam(name = "generateUris", defaultValue = "true") boolean generateUris,
+      @RequestParam(name = "append", defaultValue = "true") boolean append,
       @RequestBody Changeset<NodeId, Node> changeset,
       @AuthenticationPrincipal User user) {
 
@@ -91,7 +93,7 @@ public class NodeChangesetController {
             .map(patch -> {
               NodeId id = new NodeId(requireNonNull(patch.getId()), patch.getTypeId(), graphId);
               Node prev = nodeService.get(id, user).orElseThrow(NotFoundException::new);
-              return merge(prev, patch);
+              return merge(prev, patch, append);
             }));
 
     Stream<NodeId> deletes =
@@ -109,6 +111,7 @@ public class NodeChangesetController {
       @RequestParam(name = "sync", defaultValue = "false") boolean sync,
       @RequestParam(name = "generateCodes", defaultValue = "true") boolean generateCodes,
       @RequestParam(name = "generateUris", defaultValue = "true") boolean generateUris,
+      @RequestParam(name = "append", defaultValue = "true") boolean append,
       @RequestBody Changeset<NodeId, Node> changeset,
       @AuthenticationPrincipal User user) {
 
@@ -117,7 +120,7 @@ public class NodeChangesetController {
         changeset.getPatch().stream()
             .map(patch -> merge(
                 nodeService.get(patch.identifier(), user).orElseThrow(NotFoundException::new),
-                patch)));
+                patch, append)));
 
     Stream<NodeId> deletes =
         changeset.getDelete().stream();
@@ -126,13 +129,19 @@ public class NodeChangesetController {
         saves, deletes, saveMode(mode), opts(sync, generateCodes, generateUris), user);
   }
 
-  private Node merge(Node node, Node patch) {
+  private Node merge(Node node, Node patch, boolean append) {
     Node.Builder nodeBuilder = Node.builderFromCopyOf(node);
 
     patch.getCode().ifPresent(nodeBuilder::code);
     patch.getUri().ifPresent(nodeBuilder::uri);
-    patch.getProperties().forEach(nodeBuilder::addProperty);
-    patch.getReferences().forEach(nodeBuilder::addReference);
+
+    if (append) {
+        patch.getProperties().forEach(nodeBuilder::addProperty);
+        patch.getReferences().forEach(nodeBuilder::addReference);
+    } else {
+        patch.getProperties().asMap().forEach(nodeBuilder::replaceProperty);
+        patch.getReferences().asMap().forEach(nodeBuilder::replaceReference);
+    }
 
     return nodeBuilder.build();
   }
