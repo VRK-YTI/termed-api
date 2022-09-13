@@ -36,17 +36,14 @@ import fi.thl.termed.service.node.util.IndexedReferrerLoader;
 import fi.thl.termed.service.node.util.NodeTreeToJsonStream;
 import fi.thl.termed.service.type.specification.TypesByGraphId;
 import fi.thl.termed.util.json.JsonWriters;
-import fi.thl.termed.util.query.Queries;
-import fi.thl.termed.util.query.Query;
-import fi.thl.termed.util.query.Select;
-import fi.thl.termed.util.query.Sort;
-import fi.thl.termed.util.query.Specification;
+import fi.thl.termed.util.query.*;
 import fi.thl.termed.util.service.Service;
 import fi.thl.termed.util.spring.annotation.GetJsonMapping;
 import fi.thl.termed.util.spring.exception.NotFoundException;
 import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -75,11 +72,21 @@ public class NodeTreeReadController {
       @RequestParam(value = "max", defaultValue = "50") Integer max,
       @RequestParam(value = "pretty", defaultValue = "false") boolean pretty,
       @RequestParam(value = "htmlSafe", defaultValue = "true") boolean htmlSafe,
+      @RequestParam(value = "graphTypeId", defaultValue = EMPTY_LIST) List<String> graphTypeIds,
       @AuthenticationPrincipal User user,
       HttpServletResponse resp) throws IOException {
 
     List<Graph> graphs = toImmutableListAndClose(graphService.values(matchAll(), user));
-    List<Type> types = toImmutableListAndClose(typeService.values(matchAll(), user));
+
+    Query query = graphTypeIds.isEmpty() ? matchAll() : new Query(
+            OrSpecification.or(
+                    graphTypeIds.stream()
+                            .map(i -> new TypesByGraphId(UUID.fromString(i)))
+                            .collect(Collectors.toList())
+            )
+    );
+
+    List<Type> types = toImmutableListAndClose(typeService.values(query, user));
 
     Specification<NodeId, Node> spec = specifyByQuery(graphs, types, types, where);
     List<Select> selects = qualify(types, types, parse(select));
